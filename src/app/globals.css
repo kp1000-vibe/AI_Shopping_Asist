@@ -13,7 +13,9 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 10%;
 
-    --primary: 258 90% 66%;
+    /* violet-600. White text on this reaches 5.7:1, clearing WCAG AA.
+       The lighter brand violet (#8B5CF6) stays as a non-text accent. */
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;
@@ -36,7 +38,7 @@
 
     --border: 220 13% 91%;
     --input: 220 13% 88%;
-    --ring: 258 90% 66%;
+    --ring: 262 83% 58%;
 
     --radius: 1rem;
   }

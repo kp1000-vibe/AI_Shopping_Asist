@@ -186,7 +186,7 @@ export function Filters({ filters, onChange, retailers, resultCount }: FiltersPr
                   value={option.value}
                   checked={filters.condition === option.value}
                   onChange={() => onChange({ ...filters, condition: option.value })}
-                  className="size-4 accent-[#8B5CF6]"
+                  className="size-4 accent-[#7C3AED]"
                 />
                 <Label htmlFor={inputId} className="cursor-pointer font-normal">
                   {option.label}

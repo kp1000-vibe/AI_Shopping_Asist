@@ -4,6 +4,7 @@ import * as React from 'react';
 import { ExternalLink, Heart, Star } from 'lucide-react';
 import { ConditionBadgeList } from '@/components/condition-badges';
 import { OfferImage } from '@/components/offer-image';
+import { RetailerName } from '@/components/retailer-name';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getRetailer } from '@/lib/retailers';
@@ -48,8 +49,8 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-bold" style={{ color: retailer.color }}>
-              {retailer.name}
+            <p className="text-sm">
+              <RetailerName retailer={offer.retailer} />
             </p>
             <h3 className="mt-0.5 text-balance text-base font-semibold leading-snug">
               <span title={offer.title}>{truncate(offer.title, 110)}</span>

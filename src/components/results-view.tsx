@@ -29,12 +29,27 @@ export function ResultsView({ query, offers, initialFilters, initialSort }: Resu
   const [sort, setSort] = React.useState<SortOption>(initialSort);
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
-  // Keep the URL shareable without triggering a server round trip.
+  // Keep the URL shareable without triggering a server round trip. The URL is
+  // only rewritten when the state actually changed: rewriting it on every load
+  // re-encodes the query for no reason and confuses crawlers and auditors.
   React.useEffect(() => {
     const params = filtersToSearchParams(filters, new URLSearchParams({ q: query }));
     if (sort !== 'lowest-total') params.set('sort', sort);
     else params.delete('sort');
-    window.history.replaceState(null, '', `/search?${params.toString()}`);
+
+    const next = `?${params.toString()}`;
+    const current = window.location.search;
+    if (next === current) return;
+
+    // Ignore a pure encoding difference (%20 vs +) for identical state.
+    const normalise = (value: string) =>
+      [...new URLSearchParams(value).entries()]
+        .sort()
+        .map(([k, v]) => `${k}=${v}`)
+        .join('&');
+    if (normalise(next) === normalise(current)) return;
+
+    window.history.replaceState(null, '', `/search${next}`);
   }, [filters, sort, query]);
 
   const retailers = React.useMemo(() => availableRetailers(offers), [offers]);

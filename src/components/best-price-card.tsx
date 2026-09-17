@@ -3,6 +3,7 @@
 import { ExternalLink, Star, TrendingDown } from 'lucide-react';
 import { ConditionBadgeList } from '@/components/condition-badges';
 import { OfferImage } from '@/components/offer-image';
+import { RetailerName } from '@/components/retailer-name';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getRetailer } from '@/lib/retailers';
@@ -49,8 +50,8 @@ export function BestPriceCard({ offer, offerCount }: BestPriceCardProps) {
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div>
-            <p className="text-sm font-bold" style={{ color: retailer.color }}>
-              {retailer.name}
+            <p className="text-sm">
+              <RetailerName retailer={offer.retailer} />
             </p>
             <h2 className="mt-1 text-balance text-xl font-bold leading-snug sm:text-2xl">
               <span title={offer.title}>{truncate(offer.title, 120)}</span>

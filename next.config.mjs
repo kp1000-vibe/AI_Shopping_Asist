@@ -39,6 +39,11 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // `generateMetadata` on /search awaits `searchParams`, which makes metadata
+  // async; Next then streams the tags into <body> instead of <head>. Our
+  // metadata does no I/O, so blocking on it costs nothing and keeps title,
+  // description and canonical in <head> for every crawler.
+  htmlLimitedBots: /.*/,
   images: {
     // Retailer image CDNs are numerous and change often; product imagery is
     // always served over https and is optimised through next/image.

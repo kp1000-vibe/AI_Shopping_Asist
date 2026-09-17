@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { ConditionBadgeList } from '@/components/condition-badges';
+import { RetailerName } from '@/components/retailer-name';
 import { Badge } from '@/components/ui/badge';
 import { getRetailer } from '@/lib/retailers';
 import { formatUsd } from '@/lib/total-cost';
@@ -58,9 +59,7 @@ export function OffersTable({ offers, bestOfferId }: OffersTableProps) {
                 className={isBest ? 'bg-primary/5' : undefined}
               >
                 <th scope="row" className="border-t border-border px-4 py-3 text-left align-top">
-                  <span className="font-bold" style={{ color: retailer.color }}>
-                    {retailer.name}
-                  </span>
+                  <RetailerName retailer={offer.retailer} />
                   {isBest ? (
                     <Badge variant="best" className="ml-2 align-middle">
                       Best price

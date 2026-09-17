@@ -303,6 +303,35 @@ curl https://your-domain.com/sitemap.xml
 curl "https://your-domain.com/api/search?q=AirPods+Pro+2" | head -c 400
 ```
 
+## Measured Lighthouse scores
+
+Measured against a local production build (`next build && next start`) with Lighthouse 12 and
+Chromium 153, using the fixture provider so every page had a full set of offers:
+
+| Page                      | Preset  | Perf | A11y | Best practices | SEO | LCP   | CLS   | TBT    |
+| ------------------------- | ------- | ---- | ---- | -------------- | --- | ----- | ----- | ------ |
+| `/`                       | desktop | 100  | 100  | 100            | 100 | 0.6 s | 0.003 | 0 ms   |
+| `/search?q=AirPods Pro 2` | desktop | 100  | 100  | 100            | 100 | 0.6 s | 0.000 | 0 ms   |
+| `/product/airpods-pro-2`  | desktop | 100  | 100  | 100            | 100 | 0.5 s | 0.006 | 0 ms   |
+| `/about`                  | desktop | 100  | 100  | 100            | 100 | 0.5 s | 0.002 | 0 ms   |
+| `/`                       | mobile  | 98   | 100  | 100            | 100 | 2.2 s | 0.002 | 110 ms |
+| `/search?q=AirPods Pro 2` | mobile  | 98   | 100  | 100            | 100 | 2.3 s | 0.000 | 100 ms |
+
+Scores on a real deployment will differ, mainly because live product images are fetched from
+retailer CDNs rather than being absent. Re-measure after deploying.
+
+Two decisions came out of these runs:
+
+- The filled-button purple is `#7C3AED` (violet-600), not the lighter `#8B5CF6`. White text on
+  `#8B5CF6` is 3.5:1 and fails WCAG AA; on `#7C3AED` it is 5.7:1. The lighter brand violet is still
+  used as a non-text accent (logo corner, hero artwork).
+- Retailer names render in the foreground colour beside a brand-coloured dot. Amazon orange, eBay
+  red and Home Depot orange as _text_ on a light background are all below 4.5:1.
+- `htmlLimitedBots: /.*/` in `next.config.mjs` keeps metadata blocking. `generateMetadata` on
+  `/search` awaits `searchParams`, which makes it async, and Next then streams the tags into
+  `<body>` instead of `<head>`. Our metadata does no I/O, so blocking costs nothing and keeps
+  title, description and canonical in `<head>` for every crawler.
+
 ## Operational notes
 
 - **Caching.** Search payloads are cached for 15 minutes; individual offers for 24 hours so

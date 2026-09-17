@@ -1,8 +1,9 @@
+import { RetailerName } from '@/components/retailer-name';
 import { RETAILER_LIST } from '@/lib/retailers';
 
 /**
- * Retailer wordmarks. PriceShelf does not ship third-party logo files - the
- * names are rendered as type in each retailer brand colour, which avoids
+ * Retailer wordmarks. PriceShelf does not ship third-party logo files: the
+ * names are rendered as type with a brand-coloured dot, which avoids
  * redistributing trademarked artwork.
  */
 export function RetailerStrip() {
@@ -15,12 +16,10 @@ export function RetailerStrip() {
         <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
           {RETAILER_LIST.map((retailer) => (
             <li key={retailer.id}>
-              <span
-                className="text-lg font-bold tracking-tight opacity-80 transition-opacity hover:opacity-100 dark:opacity-90"
-                style={{ color: retailer.color }}
-              >
-                {retailer.name}
-              </span>
+              <RetailerName
+                retailer={retailer.id}
+                className="text-lg tracking-tight opacity-90 transition-opacity hover:opacity-100"
+              />
             </li>
           ))}
         </ul>
