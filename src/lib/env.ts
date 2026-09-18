@@ -35,12 +35,35 @@ function compact(source: NodeJS.ProcessEnv): Record<string, string | undefined> 
 
 let cached: ServerEnv | null = null;
 
+/**
+ * Validate each variable on its own.
+ *
+ * Parsing the whole object at once means a single malformed value - a
+ * mistyped Redis URL, say - fails the parse and discards *every* other
+ * credential with it, including a perfectly good provider key. That failure is
+ * invisible: the site simply reports that no price sources are configured.
+ * Per-key validation keeps the good values and names the bad one in the logs.
+ */
+function parseEachKey(source: Record<string, string | undefined>): ServerEnv {
+  const result: Record<string, string | undefined> = {};
+
+  for (const [key, schema] of Object.entries(serverEnvSchema.shape)) {
+    const parsed = (schema as z.ZodTypeAny).safeParse(source[key]);
+    if (parsed.success) {
+      result[key] = parsed.data as string | undefined;
+    } else {
+      console.warn(
+        `[env] ignoring ${key}: ${parsed.error.issues[0]?.message ?? 'failed validation'}`,
+      );
+    }
+  }
+
+  return result as ServerEnv;
+}
+
 export function serverEnv(): ServerEnv {
   if (cached) return cached;
-  const parsed = serverEnvSchema.safeParse(compact(process.env));
-  // A malformed optional credential should not take the site down: drop the
-  // offending values and continue with whatever validated.
-  cached = parsed.success ? parsed.data : serverEnvSchema.parse({});
+  cached = parseEachKey(compact(process.env));
   return cached;
 }
 
