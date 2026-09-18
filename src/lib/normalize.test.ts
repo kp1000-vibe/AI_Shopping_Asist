@@ -142,6 +142,26 @@ describe('isAccessoryMismatch', () => {
       false,
     );
   });
+
+  it('keeps a product whose official name bundles an accessory', () => {
+    // Apple ships the case with the earbuds: this is the product, not a case.
+    expect(
+      isAccessoryMismatch('AirPods Pro 2', 'Apple AirPods Pro 2nd generation with MagSafe Case'),
+    ).toBe(false);
+    expect(
+      isAccessoryMismatch('Nintendo Switch OLED', 'Nintendo Switch OLED including dock and stand'),
+    ).toBe(false);
+  });
+
+  it('still rejects an accessory sold for the product', () => {
+    expect(isAccessoryMismatch('AirPods Pro 2', 'MagSafe Case for AirPods Pro 2')).toBe(true);
+    expect(isAccessoryMismatch('Apple Watch', 'Replacement band, fits Apple Watch')).toBe(true);
+  });
+
+  it('falls back to title similarity when the phrasing is ambiguous', () => {
+    // Neither "for" nor "with": a weak title match is treated as an accessory.
+    expect(isAccessoryMismatch('AirPods Pro 2', 'Generic Earbud Charging Dock')).toBe(true);
+  });
 });
 
 describe('consensusGtin', () => {

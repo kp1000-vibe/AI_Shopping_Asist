@@ -175,6 +175,15 @@ const ACCESSORY_WORDS: readonly string[] = [
   'sticker',
 ];
 
+/** Phrasing that marks a listing as being sold *for* another product. */
+const ACCESSORY_INTENT = /\b(for|compatible\s+with|fits|replacement)\b/;
+
+/** Phrasing that marks an accessory word as part of what is being sold. */
+const BUNDLED_INTENT = /\b(with|includes?|including)\b/;
+
+/** Above this title similarity an accessory word is treated as part of the name. */
+const ACCESSORY_TRUST_THRESHOLD = 0.65;
+
 export function normalizeTitle(value: string): string {
   return value
     .toLowerCase()
@@ -232,13 +241,38 @@ export function titleSimilarity(a: string, b: string): number {
   return totalWeight === 0 ? 0 : Math.min(1, matchedWeight / totalWeight);
 }
 
-/** True when the listing looks like an accessory the shopper did not ask for. */
+/**
+ * True when the listing looks like an accessory the shopper did not ask for.
+ *
+ * An accessory word on its own is not enough: plenty of genuine products carry
+ * one in their official name ("AirPods Pro 2nd generation with MagSafe Case").
+ * The giveaway is the relationship. An accessory is sold *for* something else;
+ * a product ships *with* its parts.
+ */
 export function isAccessoryMismatch(query: string, title: string): boolean {
   const queryText = normalizeTitle(query);
   const titleText = normalizeTitle(title);
-  return ACCESSORY_WORDS.some(
-    (word) => titleText.includes(normalizeTitle(word)) && !queryText.includes(normalizeTitle(word)),
+
+  const hits = ACCESSORY_WORDS.map(normalizeTitle).filter(
+    (word) => titleText.includes(word) && !queryText.includes(word),
   );
+  if (hits.length === 0) return false;
+
+  // "Silicone Case for AirPods Pro 2", "Charger compatible with ...".
+  if (ACCESSORY_INTENT.test(titleText)) return true;
+
+  // "AirPods Pro 2nd generation with MagSafe Case": the case is part of the
+  // product, not the thing being sold.
+  for (const word of hits) {
+    const index = titleText.indexOf(word);
+    if (index <= 0) continue;
+    // Look at the few words immediately before the accessory word.
+    const preceding = titleText.slice(Math.max(0, index - 30), index);
+    if (BUNDLED_INTENT.test(preceding)) return false;
+  }
+
+  // Ambiguous: trust the overall title match instead.
+  return titleSimilarity(query, title) < ACCESSORY_TRUST_THRESHOLD;
 }
 
 /** A GTIN shared by at least two offers is treated as the product identity. */

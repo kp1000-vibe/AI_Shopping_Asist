@@ -1,68 +1,111 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetServerEnvCache } from '@/lib/env';
-import { mapShoppingResult, serpapiProvider, unwrapGoogleUrl } from '@/lib/providers/serpapi';
+import {
+  detailText,
+  mapShoppingResult,
+  mapStore,
+  parseShoppingResults,
+  parseStores,
+  rankProducts,
+  serpapiProvider,
+  splitMerchantName,
+  unwrapGoogleUrl,
+  type ProductContext,
+} from '@/lib/providers/serpapi';
 import { FIXED_NOW } from '@/tests/fixtures';
 
-/** Trimmed but structurally faithful SerpApi google_shopping payload. */
-const PAYLOAD = {
+/**
+ * Payloads below mirror what serpapi.com actually returned for these engines:
+ * `google_shopping` carries no merchant link, only an immersive page token,
+ * and `details_and_offers` is a list of plain strings.
+ */
+const SEARCH_PAYLOAD = {
   search_metadata: { status: 'Success' },
   shopping_results: [
     {
       position: 1,
-      title: 'Apple AirPods Pro 2 Wireless Earbuds with USB-C',
-      link: 'https://www.walmart.com/ip/apple-airpods-pro-2/1234567',
-      source: 'Walmart',
-      price: '$189.00',
-      extracted_price: 189,
-      old_price: '$249.00',
-      extracted_old_price: 249,
-      rating: 4.6,
-      reviews: 4321,
-      thumbnail: 'https://serpapi.com/images/airpods.jpg',
-      delivery: 'Free delivery with Walmart+',
-    },
-    {
-      position: 2,
       title: 'Apple AirPods Pro 2',
-      link: 'https://www.costco.com/apple-airpods-pro-2.product.100.html',
-      source: 'Costco Wholesale',
-      extracted_price: 179.99,
-      delivery: '$5.99 delivery',
-      thumbnail: 'https://serpapi.com/images/airpods-costco.jpg',
-    },
-    {
-      position: 3,
-      title: 'Apple AirPods Pro 2 refurbished',
-      link: 'https://www.ebay.com/itm/1234567890',
-      source: 'eBay',
-      extracted_price: 149,
-      second_hand_condition: 'Renewed',
+      product_id: '109082299',
+      product_link: 'https://www.google.com/search?ibp=oshop&q=AirPods Pro 2&prds=catalogid:109',
+      immersive_product_page_token: 'token-airpods-pro-2',
+      source: 'Walmart - Cellfeee',
+      price: '$154.99',
+      extracted_price: 154.99,
+      rating: 4.7,
+      reviews: 15234,
+      thumbnail: 'https://encrypted-tbn3.gstatic.com/shopping?q=tbn:abc',
       delivery: 'Free delivery',
     },
     {
-      position: 4,
-      title: 'Unknown merchant listing',
-      link: 'https://www.some-random-shop.com/p/1',
-      source: 'Some Random Shop',
-      extracted_price: 99,
+      position: 2,
+      title: 'Silicone Case for AirPods Pro 2',
+      immersive_product_page_token: 'token-case',
+      source: 'Amazon.com',
+      extracted_price: 9.99,
     },
     {
-      position: 5,
-      title: 'Listing with no usable price',
-      link: 'https://www.target.com/p/airpods/-/A-1',
-      source: 'Target',
-      price: 'See price in cart',
+      position: 3,
+      title: 'Dyson V15 Detect Cordless Vacuum',
+      immersive_product_page_token: 'token-unrelated',
+      source: 'Best Buy',
+      extracted_price: 599,
     },
   ],
 };
 
-function mockFetch(payload: unknown, ok = true) {
-  return vi.fn().mockResolvedValue({
-    ok,
-    status: ok ? 200 : 500,
-    json: async () => payload,
-  } as Response);
+const IMMERSIVE_PAYLOAD = {
+  search_metadata: { status: 'Success' },
+  product_results: {
+    title: 'Apple AirPods Pro 2',
+    rating: 4.7,
+    reviews: 15234,
+    thumbnails: ['https://encrypted-tbn3.gstatic.com/shopping?q=tbn:abc'],
+    stores: [
+      {
+        name: 'Walmart - Cellfeee',
+        link: 'https://www.walmart.com/ip/Apple-AirPods-Pro-2nd-generation/5233405730',
+        title: 'Apple AirPods Pro 2nd generation with MagSafe Case',
+        price: '$154.99',
+        extracted_price: 154.99,
+        shipping: 'Free',
+        total: '$154.99',
+        extracted_total: 154.99,
+        details_and_offers: ['In stock online', 'Free delivery'],
+      },
+      {
+        name: 'eBay',
+        link: 'https://www.ebay.com/itm/358128155517',
+        price: '$170.00',
+        extracted_price: 170,
+        shipping: '+ $19.95',
+        details_and_offers: ['In stock online', 'Delivery $19.95'],
+      },
+      {
+        name: 'Poshmark',
+        link: 'https://poshmark.com/listing/abc',
+        extracted_price: 75,
+        details_and_offers: ['In stock online'],
+      },
+      { name: 'No link merchant', extracted_price: 100 },
+    ],
+  },
+};
+
+function mockTwoStageFetch() {
+  return vi.fn().mockImplementation((input: unknown) => {
+    const url = String(input);
+    const body = url.includes('google_immersive_product') ? IMMERSIVE_PAYLOAD : SEARCH_PAYLOAD;
+    return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
+  });
 }
+
+const PRODUCT: ProductContext = {
+  title: 'Apple AirPods Pro 2',
+  image: 'https://encrypted-tbn3.gstatic.com/shopping?q=tbn:abc',
+  rating: 4.7,
+  reviewCount: 15234,
+  gtin: null,
+};
 
 describe('unwrapGoogleUrl', () => {
   it('returns non-Google URLs unchanged', () => {
@@ -74,8 +117,8 @@ describe('unwrapGoogleUrl', () => {
     expect(unwrapGoogleUrl(wrapped)).toBe('https://www.target.com/p/1');
   });
 
-  it('returns null for a Google URL with no nested target', () => {
-    expect(unwrapGoogleUrl('https://www.google.com/shopping/product/1')).toBeNull();
+  it('returns null for a Google URL whose nested param is not a URL', () => {
+    expect(unwrapGoogleUrl('https://www.google.com/search?ibp=oshop&q=AirPods+Pro+2')).toBeNull();
   });
 
   it('returns null for malformed input', () => {
@@ -83,70 +126,208 @@ describe('unwrapGoogleUrl', () => {
   });
 });
 
-describe('mapShoppingResult', () => {
-  it('maps a full result to a normalised offer', () => {
-    const offer = mapShoppingResult(PAYLOAD.shopping_results[0]!, FIXED_NOW);
+describe('splitMerchantName', () => {
+  it('separates a marketplace seller from the retailer', () => {
+    expect(splitMerchantName('Walmart - Cellfeee')).toEqual({
+      retailer: 'Walmart',
+      seller: 'Cellfeee',
+    });
+  });
+
+  it('leaves a plain retailer name alone', () => {
+    expect(splitMerchantName('Best Buy')).toEqual({ retailer: 'Best Buy', seller: null });
+  });
+});
+
+describe('detailText', () => {
+  it('flattens plain string entries', () => {
+    expect(
+      detailText({ name: 'x', details_and_offers: ['In stock online', 'Free delivery'] }),
+    ).toBe('In stock online Free delivery');
+  });
+
+  it('also accepts the older object form', () => {
+    expect(detailText({ name: 'x', details_and_offers: [{ text: 'Free delivery' }] })).toBe(
+      'Free delivery',
+    );
+  });
+
+  it('is empty when the field is missing', () => {
+    expect(detailText({ name: 'x' })).toBe('');
+  });
+});
+
+describe('per-item validation', () => {
+  it('keeps good rows and drops malformed ones', () => {
+    const stores = parseStores([
+      { name: 'Walmart', link: 'https://www.walmart.com/ip/1' },
+      { notAStore: true },
+      42,
+    ]);
+    expect(stores).toHaveLength(1);
+    expect(stores[0]?.name).toBe('Walmart');
+  });
+
+  it('does not let one bad shopping result discard the page', () => {
+    const results = parseShoppingResults([{ title: 'Real product' }, { title: '' }, null]);
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe('mapStore', () => {
+  it('maps a marketplace seller row to an offer', () => {
+    const offer = mapStore(IMMERSIVE_PAYLOAD.product_results.stores[0]!, PRODUCT, FIXED_NOW);
+
+    expect(offer).toMatchObject({
+      retailer: 'walmart',
+      price: 154.99,
+      shipping: 0,
+      inStock: true,
+      rating: 4.7,
+      reviewCount: 15234,
+      url: 'https://www.walmart.com/ip/Apple-AirPods-Pro-2nd-generation/5233405730',
+    });
+    expect(offer?.condition).toEqual(
+      expect.arrayContaining(['free-shipping', 'third-party-seller']),
+    );
+  });
+
+  it('parses a shipping charge from the shipping field', () => {
+    const offer = mapStore(IMMERSIVE_PAYLOAD.product_results.stores[1]!, PRODUCT, FIXED_NOW);
+    expect(offer?.retailer).toBe('ebay');
+    expect(offer?.shipping).toBe(19.95);
+  });
+
+  it('falls back to the detail line when there is no shipping field', () => {
+    const offer = mapStore(
+      {
+        name: 'eBay',
+        link: 'https://www.ebay.com/itm/1',
+        extracted_price: 170,
+        details_and_offers: ['In stock online', 'Delivery $12.50'],
+      },
+      PRODUCT,
+      FIXED_NOW,
+    );
+    expect(offer?.shipping).toBe(12.5);
+  });
+
+  it('drops merchants that are not tracked retailers', () => {
+    expect(mapStore(IMMERSIVE_PAYLOAD.product_results.stores[2]!, PRODUCT, FIXED_NOW)).toBeNull();
+  });
+
+  it('drops rows with no link', () => {
+    expect(mapStore(IMMERSIVE_PAYLOAD.product_results.stores[3]!, PRODUCT, FIXED_NOW)).toBeNull();
+  });
+
+  it('drops rows with no usable price', () => {
+    expect(
+      mapStore({ name: 'Target', link: 'https://www.target.com/p/1' }, PRODUCT, FIXED_NOW),
+    ).toBeNull();
+  });
+
+  it('marks an out-of-stock seller', () => {
+    const offer = mapStore(
+      {
+        name: 'Target',
+        link: 'https://www.target.com/p/1',
+        extracted_price: 199,
+        details_and_offers: ['Out of stock'],
+      },
+      PRODUCT,
+      FIXED_NOW,
+    );
+    expect(offer?.inStock).toBe(false);
+    expect(offer?.condition).toContain('out-of-stock');
+  });
+});
+
+describe('rankProducts', () => {
+  it('keeps matching products and drops accessories and unrelated items', () => {
+    const results = parseShoppingResults(SEARCH_PAYLOAD.shopping_results);
+    const ranked = rankProducts('AirPods Pro 2', results);
+
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]?.title).toBe('Apple AirPods Pro 2');
+  });
+
+  it('ignores products with no immersive token', () => {
+    const ranked = rankProducts('AirPods Pro 2', [{ title: 'Apple AirPods Pro 2' }]);
+    expect(ranked).toEqual([]);
+  });
+
+  it('respects the lookup limit', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      title: 'Apple AirPods Pro 2',
+      immersive_product_page_token: `token-${i}`,
+    }));
+    expect(rankProducts('AirPods Pro 2', many, 3)).toHaveLength(3);
+  });
+});
+
+describe('mapShoppingResult (direct-link fast path)', () => {
+  it('maps a result that already carries a merchant link', () => {
+    const offer = mapShoppingResult(
+      {
+        title: 'Apple AirPods Pro 2',
+        link: 'https://www.walmart.com/ip/apple-airpods-pro-2/1234567',
+        source: 'Walmart',
+        extracted_price: 189,
+        extracted_old_price: 249,
+        rating: 4.6,
+        reviews: 4321,
+        thumbnail: 'https://serpapi.com/images/airpods.jpg',
+        delivery: 'Free delivery with Walmart+',
+      },
+      FIXED_NOW,
+    );
+
     expect(offer).toMatchObject({
       retailer: 'walmart',
       price: 189,
       originalPrice: 249,
       shipping: 0,
-      inStock: true,
-      rating: 4.6,
-      reviewCount: 4321,
-      lastUpdated: FIXED_NOW,
     });
     expect(offer?.condition).toContain('walmart-plus');
-    expect(offer?.id).toMatch(/^walmart-/);
   });
 
-  it('parses a paid delivery charge and membership requirement', () => {
-    const offer = mapShoppingResult(PAYLOAD.shopping_results[1]!, FIXED_NOW);
-    expect(offer?.retailer).toBe('costco');
-    expect(offer?.shipping).toBe(5.99);
-    expect(offer?.condition).toContain('membership-required');
+  it('refuses a Google Shopping product page as a destination', () => {
+    expect(
+      mapShoppingResult(
+        {
+          title: 'Apple AirPods Pro 2',
+          product_link: 'https://www.google.com/search?ibp=oshop&q=AirPods+Pro+2',
+          source: 'Walmart',
+          extracted_price: 154.99,
+        },
+        FIXED_NOW,
+      ),
+    ).toBeNull();
   });
 
-  it('detects a renewed condition', () => {
-    const offer = mapShoppingResult(PAYLOAD.shopping_results[2]!, FIXED_NOW);
-    expect(offer?.condition).toContain('renewed');
-  });
-
-  it('drops merchants that are not tracked retailers', () => {
-    expect(mapShoppingResult(PAYLOAD.shopping_results[3]!, FIXED_NOW)).toBeNull();
-  });
-
-  it('drops listings with no parseable price', () => {
-    expect(mapShoppingResult(PAYLOAD.shopping_results[4]!, FIXED_NOW)).toBeNull();
-  });
-
-  it('ignores a strike-through price that is not a discount', () => {
-    const offer = mapShoppingResult(
-      {
-        title: 'AirPods',
-        link: 'https://www.target.com/p/1',
-        source: 'Target',
-        extracted_price: 200,
-        extracted_old_price: 180,
-      },
-      FIXED_NOW,
-    );
-    expect(offer?.originalPrice).toBeNull();
-  });
-
-  it('marks sold-out listings as out of stock', () => {
-    const offer = mapShoppingResult(
-      {
-        title: 'AirPods',
-        link: 'https://www.target.com/p/1',
-        source: 'Target',
-        extracted_price: 200,
-        tag: 'Out of stock',
-      },
-      FIXED_NOW,
-    );
-    expect(offer?.inStock).toBe(false);
-    expect(offer?.condition).toContain('out-of-stock');
+  it('drops untracked merchants and unusable prices', () => {
+    expect(
+      mapShoppingResult(
+        {
+          title: 'x',
+          link: 'https://www.some-shop.com/p/1',
+          source: 'Some Shop',
+          extracted_price: 9,
+        },
+        FIXED_NOW,
+      ),
+    ).toBeNull();
+    expect(
+      mapShoppingResult(
+        {
+          title: 'x',
+          link: 'https://www.target.com/p/1',
+          source: 'Target',
+          price: 'See price in cart',
+        },
+        FIXED_NOW,
+      ),
+    ).toBeNull();
   });
 });
 
@@ -171,8 +352,8 @@ describe('serpapiProvider', () => {
     expect(serpapiProvider.isConfigured()).toBe(false);
   });
 
-  it('returns only offers from tracked retailers', async () => {
-    const fetchMock = mockFetch(PAYLOAD);
+  it('searches, then resolves seller lists for the matching product', async () => {
+    const fetchMock = mockTwoStageFetch();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const offers = await serpapiProvider.search({
@@ -181,10 +362,13 @@ describe('serpapiProvider', () => {
       now: () => new Date(FIXED_NOW),
     });
 
-    expect(offers.map((offer) => offer.retailer)).toEqual(['walmart', 'costco', 'ebay']);
-    const requested = String(fetchMock.mock.calls[0]?.[0]);
-    expect(requested).toContain('engine=google_shopping');
-    expect(requested).toContain('gl=us');
+    // Walmart and eBay are tracked; Poshmark and the link-less row are not.
+    expect(offers.map((offer) => offer.retailer).sort()).toEqual(['ebay', 'walmart']);
+
+    const calls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(calls[0]).toContain('engine=google_shopping');
+    // Only the one matching product earns an immersive lookup.
+    expect(calls.filter((url) => url.includes('google_immersive_product'))).toHaveLength(1);
   });
 
   it('returns an empty list when no key is configured', async () => {
@@ -196,21 +380,62 @@ describe('serpapiProvider', () => {
   });
 
   it('throws when SerpApi reports an error', async () => {
-    globalThis.fetch = mockFetch({ error: 'Invalid API key' }) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ error: 'Invalid API key' }),
+    } as Response) as unknown as typeof fetch;
+
     await expect(serpapiProvider.search({ query: 'AirPods', timeoutMs: 8000 })).rejects.toThrow(
       'Invalid API key',
     );
   });
 
   it('throws a ProviderError on a non-2xx response', async () => {
-    globalThis.fetch = mockFetch({}, false) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    } as Response) as unknown as typeof fetch;
+
     await expect(serpapiProvider.search({ query: 'AirPods', timeoutMs: 8000 })).rejects.toThrow(
       /HTTP 500/,
     );
   });
 
+  it('survives an immersive lookup failing', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((input: unknown) => {
+      if (String(input).includes('google_immersive_product')) {
+        return Promise.reject(new Error('upstream down'));
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => SEARCH_PAYLOAD,
+      } as Response);
+    }) as unknown as typeof fetch;
+
+    await expect(
+      serpapiProvider.search({ query: 'AirPods Pro 2', timeoutMs: 8000 }),
+    ).resolves.toEqual([]);
+  });
+
+  it('skips lookups once the time budget is spent', async () => {
+    const fetchMock = mockTwoStageFetch();
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await serpapiProvider.search({ query: 'AirPods Pro 2', timeoutMs: 1 });
+
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes('immersive'))).toHaveLength(0);
+  });
+
   it('returns an empty list when the payload shape is unusable', async () => {
-    globalThis.fetch = mockFetch('not an object') as unknown as typeof fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => 'not an object',
+    } as Response) as unknown as typeof fetch;
+
     await expect(serpapiProvider.search({ query: 'AirPods', timeoutMs: 8000 })).resolves.toEqual(
       [],
     );

@@ -2,6 +2,7 @@ import { unstable_cache } from 'next/cache';
 import Link from 'next/link';
 import { ArrowUpRight, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { TRENDING_REVALIDATE_SECONDS } from '@/lib/cache-policy';
 import { TRENDING_QUERIES } from '@/lib/content';
 import { bestOffer } from '@/lib/offers';
 import { getRetailer } from '@/lib/retailers';
@@ -17,8 +18,9 @@ interface TrendingEntry {
 }
 
 /**
- * Cached at the route level for 15 minutes so the home page stays statically
- * rendered and the provider quota is not spent on every visit.
+ * Cached at the route level so the home page stays statically rendered and the
+ * provider quota is not spent on every visit. See `lib/cache-policy.ts` for why
+ * this window is much longer than the 15 minute search cache.
  */
 const loadTrending = unstable_cache(
   async (): Promise<TrendingEntry[]> => {
@@ -37,7 +39,7 @@ const loadTrending = unstable_cache(
     );
   },
   ['priceshelf:trending:v1'],
-  { revalidate: 900, tags: ['trending'] },
+  { revalidate: TRENDING_REVALIDATE_SECONDS, tags: ['trending'] },
 );
 
 /**

@@ -27,6 +27,9 @@ test.describe('accessibility', () => {
 
   test('filters are operable with the keyboard', async ({ page }) => {
     await page.goto('/search?q=Dyson%20V15%20Detect');
+    // Wait for results before touching the filters: under full-suite load the
+    // panel can render before the offers it filters.
+    await expect(page.getByTestId('best-price-card')).toBeVisible();
 
     const checkbox = page.getByLabel('Hide offers that need a membership');
     await checkbox.focus();

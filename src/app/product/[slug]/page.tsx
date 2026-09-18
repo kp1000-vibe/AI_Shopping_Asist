@@ -8,6 +8,7 @@ import { ProductGallery } from '@/components/product-gallery';
 import { ProviderNotice } from '@/components/provider-notice';
 import { SearchBar } from '@/components/search-bar';
 import { Badge } from '@/components/ui/badge';
+import { PRODUCT_REVALIDATE_SECONDS } from '@/lib/cache-policy';
 import { POPULAR_QUERIES } from '@/lib/content';
 import { bestOffer, priceRange, sortOffers } from '@/lib/offers';
 import { searchOffers } from '@/lib/search';
@@ -16,7 +17,8 @@ import { productPath, searchPath, slugify, titleCase, unslugify } from '@/lib/sl
 import { DEFAULT_TAX_STATE, formatUsd, priceOffers } from '@/lib/total-cost';
 import type { PricedOffer, ProviderStatus } from '@/lib/types';
 
-export const revalidate = 900;
+// Page-level ISR window; the underlying search cache is still 15 minutes.
+export const revalidate = 3600;
 
 interface ProductData {
   name: string;
@@ -43,7 +45,7 @@ const loadProduct = unstable_cache(
     };
   },
   ['priceshelf:product:v1'],
-  { revalidate: 900 },
+  { revalidate: PRODUCT_REVALIDATE_SECONDS },
 );
 
 export function generateStaticParams(): Array<{ slug: string }> {

@@ -82,6 +82,12 @@ describe('deriveConditions - retailer programmes', () => {
     expect(codes).toContain('free-shipping-threshold');
   });
 
+  it('does not promise free shipping when a real charge is quoted', () => {
+    const codes = deriveConditions(input({ retailer: 'bestbuy', price: 369, shipping: 16.49 }));
+    expect(codes).not.toContain('free-shipping-threshold');
+    expect(codes).not.toContain('free-shipping');
+  });
+
   it('prefers a concrete free-shipping badge over the threshold', () => {
     const codes = deriveConditions(input({ retailer: 'target', price: 60, shipping: 0 }));
     expect(codes).toContain('free-shipping');

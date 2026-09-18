@@ -87,6 +87,10 @@ export function deriveConditions(input: ConditionInput): ConditionCode[] {
   if (freeShipping) {
     codes.add('free-shipping');
   } else if (
+    // Only advertise the threshold when the retailer has not quoted a real
+    // shipping charge. Claiming "free over $35" next to a $16.49 shipping line
+    // is worse than saying nothing.
+    input.shipping === null &&
     retailer.freeShippingThreshold !== undefined &&
     input.price >= retailer.freeShippingThreshold
   ) {

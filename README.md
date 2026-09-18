@@ -28,21 +28,42 @@ sales tax for your ship-to state — and shows the buying conditions attached to
 ## How it works
 
 ```
- /search?q=…
-     │
-     ▼
- lib/search.ts ──► Redis cache (15 min)  ──► hit: return
-     │
-     ├─► providers run in parallel (Promise.allSettled, 8s timeout each)
-     │      ├─ serpapi.ts   Google Shopping engine (Walmart, Target, Costco, Best Buy, …)
-     │      ├─ amazon.ts    Rainforest API (Amazon product data)
-     │      └─ walmart.ts   Walmart affiliate catalogue via Impact
-     │
-     ├─► product matching   GTIN/UPC consensus, then weighted title similarity
-     │                      + accessory rejection ("case for …", "charger for …")
-     ├─► deduplication      one offer per retailer, cheapest wins
-     └─► cache write        search payload (15 min) + each offer (24 h, for /go/[offerId])
+ /search?q=...
+     |
+     v
+ lib/search.ts --> Redis cache (15 min)  --> hit: return
+     |
+     +-> providers run in parallel (Promise.allSettled, 8s timeout each)
+     |      +- serpapi.ts   two-stage Google Shopping (see below)
+     |      +- amazon.ts    Rainforest API (Amazon product data)
+     |      +- walmart.ts   Walmart affiliate catalogue via Impact
+     |
+     +-> product matching   GTIN/UPC consensus, then weighted title similarity
+     |                      + accessory rejection ("case for ...", "charger for ...")
+     +-> deduplication      one offer per retailer, cheapest wins
+     +-> cache write        search payload (15 min) + each offer (24 h, for /go/[offerId])
 ```
+
+### Why the SerpApi adapter makes two calls
+
+Google Shopping no longer exposes a merchant link on its results page, so
+SerpApi's `google_shopping` engine returns products with prices but no way to
+reach the retailer. The seller list - real retailer URLs, shipping and totals -
+sits behind the `google_immersive_product` engine, one call per product.
+
+So `lib/providers/serpapi.ts` runs:
+
+1. one `google_shopping` search (~0.2-0.5s, **1 API credit**)
+2. up to **3** parallel immersive lookups for the products that actually match
+   the query (~0.1-5s each, **1 credit each**)
+
+Worst case that is **4 credits per uncached search**. Both stages share the 8
+second provider deadline; a lookup that runs out of budget is dropped rather
+than failing the search, so a slow upstream means fewer offers, never none.
+
+If PriceShelf ever returns products without links again, check whether the
+adapter's direct-link fast path still applies - it skips stage two entirely
+when a result already carries a usable merchant URL.
 
 A provider that fails or times out never blocks the others; the UI renders what arrived and shows
 a "some stores did not respond" notice naming the ones that did not.
@@ -334,9 +355,18 @@ Two decisions came out of these runs:
 
 ## Operational notes
 
-- **Caching.** Search payloads are cached for 15 minutes; individual offers for 24 hours so
-  `/go/[offerId]` links stay resolvable. Empty result sets are never cached, so a transient outage
-  cannot pin an empty page.
+- **Caching and provider quota.** Search payloads are cached for 15 minutes; individual offers for
+  24 hours so `/go/[offerId]` links stay resolvable. Empty result sets are never cached, so a
+  transient outage cannot pin an empty page.
+
+  Pages that refresh themselves use much longer windows, because each refresh spends credits
+  nobody asked for. The home page's six trending tiles cost up to 24 SerpApi credits per refresh,
+  which at a 15 minute window would be ~2,300 a day and would exhaust a free plan within the hour.
+  Defaults are therefore 6 hours for trending and 1 hour for pre-rendered product pages - see
+  `src/lib/cache-policy.ts`, and override with `PRICESHELF_TRENDING_TTL_SECONDS` and
+  `PRICESHELF_PRODUCT_TTL_SECONDS` if your plan has room. A shopper's own search is always at most
+  15 minutes old.
+
 - **Rate limiting.** `/api/search` allows 30 requests per minute per IP and returns `429` with
   `Retry-After` beyond that. Server-rendered pages are not rate limited.
 - **Security headers.** CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, HSTS and a

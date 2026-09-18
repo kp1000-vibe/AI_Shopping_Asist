@@ -6,7 +6,8 @@ import { RetailerStrip } from '@/components/retailer-strip';
 import { TrendingDeals } from '@/components/trending-deals';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export const revalidate = 900;
+// Kept in step with the trending tiles; see lib/cache-policy.ts.
+export const revalidate = 21600;
 
 export const metadata: Metadata = {
   title: 'PriceShelf — Compare live prices across US retailers',
