@@ -113,6 +113,50 @@ describe('runProviders', () => {
     expect(result.statuses[0]?.reason).toBe('Weird store is temporarily unavailable');
   });
 
+  it('honours a per-provider timeout when the run sets none', async () => {
+    const result = await runProviders('AirPods Pro 2', {
+      providers: [
+        fakeProvider({
+          id: 'patient',
+          label: 'Patient store',
+          timeoutMs: 400,
+          search: async (context) => {
+            // The provider is told its own budget, not the shared default.
+            expect(context.timeoutMs).toBe(400);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            return [makeOffer({ retailer: 'amazon' })];
+          },
+        }),
+      ],
+    });
+
+    expect(result.partial).toBe(false);
+    expect(result.offers).toHaveLength(1);
+  });
+
+  it('lets an explicit run timeout override the provider preference', async () => {
+    const result = await runProviders('AirPods Pro 2', {
+      timeoutMs: 30,
+      providers: [
+        fakeProvider({
+          id: 'slow',
+          label: 'Slow store',
+          timeoutMs: 60_000,
+          search: () => new Promise(() => {}),
+        }),
+      ],
+    });
+
+    expect(result.partial).toBe(true);
+    expect(result.statuses[0]?.reason).toBe('Slow store did not respond in time');
+  });
+
+  it('gives SerpApi a longer budget than the shared default', () => {
+    const serpapi = ALL_PROVIDERS.find((provider) => provider.id === 'serpapi');
+    // SerpApi scrapes Google live for a cold query: 15-37s by its own clock.
+    expect(serpapi?.timeoutMs ?? 0).toBeGreaterThan(30_000);
+  });
+
   it('registers the built-in providers', () => {
     expect(ALL_PROVIDERS.map((provider) => provider.id)).toEqual([
       'serpapi',

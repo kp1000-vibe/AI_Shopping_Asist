@@ -68,7 +68,6 @@ export async function runProviders(
   query: string,
   options: RunProvidersOptions = {},
 ): Promise<ProviderRunResult> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
   const registry = options.providers ?? ALL_PROVIDERS;
   const active = registry.filter((provider) => provider.isConfigured());
 
@@ -76,19 +75,23 @@ export async function runProviders(
     return { offers: [], statuses: [], partial: false, noProvidersConfigured: true };
   }
 
-  const context: Omit<ProviderContext, 'query'> = {
-    timeoutMs,
+  const context: Omit<ProviderContext, 'query' | 'timeoutMs'> = {
     signal: options.signal,
     now: options.now,
   };
 
+  // An explicit per-run timeout wins; otherwise each provider may set its own.
+  const budgetFor = (provider: Provider) =>
+    options.timeoutMs ?? provider.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
+
   const settled = await Promise.allSettled(
     active.map(async (provider) => {
       const startedAt = Date.now();
+      const budget = budgetFor(provider);
       try {
         const offers = await withTimeout(
-          provider.search({ ...context, query }),
-          timeoutMs,
+          provider.search({ ...context, query, timeoutMs: budget }),
+          budget,
           provider.label,
         );
         return { provider, offers, durationMs: Date.now() - startedAt };
@@ -123,7 +126,7 @@ export async function runProviders(
       statuses.push({
         provider: provider.label,
         ok: false,
-        durationMs: error.durationMs ?? timeoutMs,
+        durationMs: error.durationMs ?? budgetFor(provider),
         offers: 0,
         reason: error.message,
       });

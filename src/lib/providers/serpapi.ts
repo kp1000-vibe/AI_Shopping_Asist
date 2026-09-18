@@ -24,9 +24,9 @@ const ENDPOINT = 'https://serpapi.com/search.json';
  *
  * The adapter therefore runs in two stages:
  *
- *   1. one `google_shopping` search  (~0.4s, 1 API credit)
+ *   1. one `google_shopping` search (~0.2s warm, 15-37s cold, 1 API credit)
  *   2. up to `MAX_PRODUCT_LOOKUPS` parallel immersive lookups for the products
- *      that actually match the query (~0.1-5s each, 1 credit each)
+ *      that actually match the query (~2-7s each, 1 credit each)
  *
  * Both stages share the provider deadline. A lookup that does not come back in
  * time is dropped rather than failing the search, so a slow upstream degrades
@@ -35,7 +35,7 @@ const ENDPOINT = 'https://serpapi.com/search.json';
  * Every list is validated per item rather than as a whole, so one unexpected
  * row cannot discard an entire product, and anything dropped is logged.
  */
-const MAX_PRODUCT_LOOKUPS = 3;
+const MAX_PRODUCT_LOOKUPS = 2;
 
 /** Minimum title similarity before a product is worth an immersive lookup. */
 const PRODUCT_MATCH_THRESHOLD = 0.45;
@@ -375,9 +375,27 @@ function toProductContext(
   };
 }
 
+/**
+ * SerpApi scrapes Google live for a query it has not served before. Its own
+ * `total_time_taken` for a cold shopping search measures 15-37s; a repeat of
+ * the same query comes back from SerpApi's cache in about 200ms. The two
+ * immersive lookups add a further 2-7s.
+ *
+ * So this provider gets its own, much larger budget. Everything downstream is
+ * unchanged: a search that overruns still degrades to "did not respond in
+ * time" rather than failing the page, and our own 15 minute cache means any
+ * given shopper pays the cold cost at most once per query.
+ */
+const SERPAPI_TIMEOUT_MS = (() => {
+  const raw = process.env.PRICESHELF_SERPAPI_TIMEOUT_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 45_000;
+})();
+
 export const serpapiProvider: Provider = {
   id: 'serpapi',
   label: 'Google Shopping',
+  timeoutMs: SERPAPI_TIMEOUT_MS,
 
   isConfigured() {
     return Boolean(serverEnv().SERPAPI_KEY);

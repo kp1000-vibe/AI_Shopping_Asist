@@ -16,6 +16,12 @@ export interface Provider {
   id: string;
   /** Shopper-facing name. */
   label: string;
+  /**
+   * Per-provider deadline, when the shared default is wrong for this upstream.
+   * SerpApi scrapes Google live for a query it has not seen, which its own
+   * `total_time_taken` puts at 15-37s, so it needs far longer than the rest.
+   */
+  timeoutMs?: number;
   /** False when the provider has no credentials configured. */
   isConfigured(): boolean;
   search(context: ProviderContext): Promise<Offer[]>;

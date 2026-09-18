@@ -44,6 +44,36 @@ sales tax for your ship-to state — and shows the buying conditions attached to
      +-> cache write        search payload (15 min) + each offer (24 h, for /go/[offerId])
 ```
 
+### How long a search actually takes
+
+SerpApi scrapes Google live for a query it has not served before. Measured with
+its own `total_time_taken`:
+
+| Situation                                    | Time    |
+| -------------------------------------------- | ------- |
+| Cold query (nobody has searched it lately)   | 15-37 s |
+| Repeat query, served from SerpApi's cache    | ~0.2 s  |
+| Repeat query, served from PriceShelf's cache | ~0.03 s |
+
+That is upstream latency, not something the app can optimise away. Two
+consequences are baked into the build:
+
+- **SerpApi gets its own 45 s budget** (`Provider.timeoutMs`, override with
+  `PRICESHELF_SERPAPI_TIMEOUT_MS`) while every other provider keeps the shared
+  8 s. A provider that overruns still degrades to "did not respond in time"
+  rather than failing the page.
+- **Vercel functions are given 60 s** (`vercel.json`). On Hobby and Pro plans
+  that is within limits; the default of 10 s is not enough for a cold search.
+
+The search page streams, so a shopper sees the skeleton and a line explaining
+that the first search for a product can take up to a minute. Every search after
+that is instant for 15 minutes.
+
+If cold latency becomes a problem in production, the next step is SerpApi's
+async mode (`async=true`), which returns a search id immediately and is polled
+from the Archive API. That turns the cold path into a background job instead of
+a long request, at the cost of a job store and client polling.
+
 ### Why the SerpApi adapter makes two calls
 
 Google Shopping no longer exposes a merchant link on its results page, so
