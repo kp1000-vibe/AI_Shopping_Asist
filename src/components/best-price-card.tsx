@@ -38,8 +38,8 @@ export function BestPriceCard({ offer, offerCount }: BestPriceCardProps) {
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:p-6">
-        <div className="relative h-44 w-full shrink-0 overflow-hidden rounded-md bg-muted sm:h-40 sm:w-40">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:p-6 lg:flex-col xl:flex-row">
+        <div className="relative h-44 w-full shrink-0 overflow-hidden rounded-md bg-muted sm:h-40 sm:w-40 lg:h-44 lg:w-full xl:h-40 xl:w-40">
           <OfferImage
             src={offer.image}
             alt={offer.title}
@@ -71,9 +71,9 @@ export function BestPriceCard({ offer, offerCount }: BestPriceCardProps) {
           <ConditionBadgeList conditions={offer.condition} retailer={offer.retailer} />
         </div>
 
-        <div className="flex shrink-0 flex-col justify-between gap-4 sm:w-56 sm:text-right">
+        <div className="flex shrink-0 flex-col justify-between gap-4 sm:w-56 sm:text-right lg:w-full lg:text-left xl:w-56 xl:text-right">
           <div>
-            <p className="flex flex-wrap items-baseline gap-2 sm:justify-end">
+            <p className="flex flex-wrap items-baseline gap-2 sm:justify-end lg:justify-start xl:justify-end">
               <span className="text-3xl font-bold tabular-nums">{formatUsd(offer.price)}</span>
               {offer.originalPrice !== null ? (
                 <span className="text-base tabular-nums text-muted-foreground line-through">
@@ -88,7 +88,7 @@ export function BestPriceCard({ offer, offerCount }: BestPriceCardProps) {
             ) : null}
 
             <dl className="mt-3 space-y-0.5 text-sm text-muted-foreground">
-              <div className="flex gap-1 sm:justify-end">
+              <div className="flex gap-1 sm:justify-end lg:justify-start xl:justify-end">
                 <dt>Shipping:</dt>
                 <dd className="tabular-nums">
                   {offer.shippingUnknown
@@ -98,11 +98,11 @@ export function BestPriceCard({ offer, offerCount }: BestPriceCardProps) {
                       : formatUsd(offer.effectiveShipping)}
                 </dd>
               </div>
-              <div className="flex gap-1 sm:justify-end">
+              <div className="flex gap-1 sm:justify-end lg:justify-start xl:justify-end">
                 <dt>Est. tax:</dt>
                 <dd className="tabular-nums">{formatUsd(offer.estimatedTax)}</dd>
               </div>
-              <div className="flex gap-1 text-base font-bold text-foreground sm:justify-end">
+              <div className="flex gap-1 text-base font-bold text-foreground sm:justify-end lg:justify-start xl:justify-end">
                 <dt>Total:</dt>
                 <dd className="tabular-nums" data-testid="best-total">
                   {formatUsd(offer.totalCost)}

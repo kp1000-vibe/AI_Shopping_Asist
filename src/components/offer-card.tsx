@@ -33,11 +33,11 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
       data-retailer={offer.retailer}
       data-membership={offer.requiresMembership ? 'required' : 'none'}
       className={cn(
-        'flex flex-col gap-4 rounded-lg border bg-card p-4 shadow-card transition-shadow duration-200 hover:shadow-card-hover sm:flex-row sm:p-5',
+        'flex flex-col gap-4 rounded-lg border bg-card p-4 shadow-card transition-shadow duration-200 hover:shadow-card-hover sm:flex-row sm:p-5 lg:flex-col xl:flex-row',
         best ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border',
       )}
     >
-      <div className="relative h-32 w-full shrink-0 overflow-hidden rounded-md bg-muted sm:h-28 sm:w-28">
+      <div className="relative h-32 w-full shrink-0 overflow-hidden rounded-md bg-muted sm:h-28 sm:w-28 lg:h-32 lg:w-full xl:h-28 xl:w-28">
         <OfferImage
           src={offer.image}
           alt={offer.title}
@@ -80,9 +80,9 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
         </p>
       </div>
 
-      <div className="flex shrink-0 flex-col justify-between gap-3 sm:w-52 sm:items-end sm:text-right">
+      <div className="flex shrink-0 flex-col justify-between gap-3 sm:w-52 sm:items-end sm:text-right lg:w-full lg:items-stretch lg:text-left xl:w-52 xl:items-end xl:text-right">
         <div>
-          <p className="flex flex-wrap items-baseline gap-2 sm:justify-end">
+          <p className="flex flex-wrap items-baseline gap-2 sm:justify-end lg:justify-start xl:justify-end">
             <span className="text-2xl font-bold tabular-nums">{formatUsd(offer.price)}</span>
             {offer.originalPrice !== null ? (
               <span className="text-sm tabular-nums text-muted-foreground line-through">
@@ -97,7 +97,7 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
           </p>
 
           <dl className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-            <div className="flex gap-1 sm:justify-end">
+            <div className="flex gap-1 sm:justify-end lg:justify-start xl:justify-end">
               <dt>Shipping:</dt>
               <dd className="tabular-nums">
                 {offer.shippingUnknown
@@ -107,11 +107,11 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
                     : formatUsd(offer.effectiveShipping)}
               </dd>
             </div>
-            <div className="flex gap-1 sm:justify-end">
+            <div className="flex gap-1 sm:justify-end lg:justify-start xl:justify-end">
               <dt>Est. tax:</dt>
               <dd className="tabular-nums">{formatUsd(offer.estimatedTax)}</dd>
             </div>
-            <div className="flex gap-1 font-semibold text-foreground sm:justify-end">
+            <div className="flex gap-1 font-semibold text-foreground sm:justify-end lg:justify-start xl:justify-end">
               <dt>Total:</dt>
               <dd className="tabular-nums" data-testid="offer-total">
                 {formatUsd(offer.totalCost)}
@@ -120,7 +120,7 @@ export function OfferCard({ offer, best = false, index = 0 }: OfferCardProps) {
           </dl>
         </div>
 
-        <div className="flex items-center gap-2 sm:justify-end">
+        <div className="flex items-center gap-2 sm:justify-end lg:justify-start xl:justify-end">
           <Button
             type="button"
             variant="outline"
